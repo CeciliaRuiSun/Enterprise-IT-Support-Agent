@@ -44,6 +44,7 @@
 - Priority
 - Assigned_to
 - Status
+- Comments
 - Created_at
 - Updated_at
 
