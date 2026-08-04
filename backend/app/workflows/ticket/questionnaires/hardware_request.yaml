@@ -1,0 +1,19 @@
+ticket_type: hardware_request
+
+fields:
+  - name: requested_item
+    question: What hardware item do you need?
+    required: true
+
+  - name: business_justification
+    question: Why do you need this hardware?
+    required: true
+
+  - name: urgency
+    question: How urgent is this request?
+    required: true
+
+  - name: delivery_location
+    question: Where should the hardware be delivered?
+    required: true
+

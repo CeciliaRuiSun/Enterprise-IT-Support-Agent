@@ -1,0 +1,19 @@
+ticket_type: incident_ticket
+
+fields:
+  - name: issue_summary
+    question: Briefly describe the issue.
+    required: true
+
+  - name: affected_system
+    question: Which system or device is affected?
+    required: true
+
+  - name: impact
+    question: How is this impacting your work?
+    required: true
+
+  - name: urgency
+    question: How urgent is this incident?
+    required: true
+

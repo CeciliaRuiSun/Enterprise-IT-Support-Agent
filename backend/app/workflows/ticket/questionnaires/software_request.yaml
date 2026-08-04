@@ -1,0 +1,19 @@
+ticket_type: software_request
+
+fields:
+  - name: software_name
+    question: What software do you need?
+    required: true
+
+  - name: business_justification
+    question: Why do you need this software?
+    required: true
+
+  - name: requested_for
+    question: Who needs the software?
+    required: false
+
+  - name: urgency
+    question: How urgent is this request?
+    required: true
+

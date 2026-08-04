@@ -1,50 +1,62 @@
 ## User
-- User_ID
-- Email
-- Full_name
+- user_id
+- email
+- full_name
 
 ## Conversation
-- Conversation_ID
-- User_ID
-- Status
-- Created_at
+- conversation_id
+- user_id
+- status
+- created_at
 
 ## Message
-- Message_ID
-- Role
-- Content
-- Conversation_ID
-- Time
-
-## AgentAction
-- Conversation_ID
-- Action_ID
-- Action_type
-- Parameters
+- message_id
+- role
+- content
+- conversation_id
+- time
 
 ## Knowledge Document
-- Document_ID
-- Title
-- Created_at
-- Updated_at
+- document_id
+- title
+- created_at
+- updated_at
 
 ## Toolcall
-- Action_ID
-- Tool_Name
-- Status
-- Latency
+- action_id
+- tool_name
+- status
+- latency
 
 ## Ticket
-- Ticket_ID
-- Submitted_by
-- Request_type
-- Request_for
-- Business_Justification
-- Description
-- Priority
-- Assigned_to
-- Status
-- Comments
-- Created_at
-- Updated_at
+- ticket_id
+- submitted_by
+- request_type
+- request_for
+- business_justification
+- description
+- priority
+- assigned_to
+- status
+- comments
+- created_at
+- updated_at
 
+## DocumentChunk
+- chunk_id
+- document_id
+- content
+- chunk_index
+- embedding
+- page_number
+- metadata
+- created_at
+
+## WorkflowRuns
+- id
+- conversation_id
+- workflow_type
+- status
+- state JSONB
+- created_at
+- updated_at

@@ -1,0 +1,750 @@
+You are a senior software engineer and staff system architect.
+Build an MVP of an IT support agent called:
+#Enterprise IT Support Agent
+
+Follow the specified architecture unless it prevents a working MVP.
+Do not add major frameworks or infrastructure that are not requested.
+
+This is NOT a toy chatbot project. Build it to be enterprise-oriented.
+
+The goal is to eventually create a portfolio-quality IT AI Agent to reduce IT service desk's burden by answering users' questions.
+
+## Core Requirements
+
+The MVP system must support:
+
+1. Conversational AI Chat
+2. Tool Calling
+3. Document RAG
+4. Conversation History
+5. Modern Full Stack Architecture
+
+# Tech Stack
+
+Backend:
+
+* Python
+* FastAPI
+* OpenAI Responses API
+* PostgreSQL
+* SQLAlchemy
+* Alembic
+
+Frontend:
+
+* Next.js 15
+* React
+* TypeScript
+* TailwindCSS
+
+AI Components:
+
+* OpenAI GPT model
+* OpenAI Embeddings
+* pgvector
+
+
+---
+
+# Project Structure
+
+Generate a clean production-style structure.
+
+Example:
+
+backend/
+app/
+api/
+agent/
+tools/
+services/
+models/
+schemas/
+db/
+core/
+main.py
+
+frontend/
+app/
+components/
+hooks/
+lib/
+types/
+
+---
+
+
+# Agent Architecture
+
+
+                User
+                 ↓
+             AI Agent
+                 ↓
+          ----------------------   
+         ↓                      ↓
+Knowledge Retrieval     Tool Registry
+                                ↓
+                       ----------------------  
+                       ↓                     ↓
+           Create_a_ticket_tool    Search_a_ticket_tool 
+                           
+
+The agent should be able to decide which tool to use. 
+
+---
+
+# Chat Experience
+
+Build a ChatGPT-like interface.
+
+Features:
+
+* conversation list
+* message history
+* tool execution display
+* source references
+
+---
+
+
+# Knowledge Retrieval 
+
+Document RAG.
+
+Purpose:
+
+Search uploaded documents.
+
+Supported:
+
+* PDF
+* DOCX
+* TXT
+
+
+Only do document parsing in MVP:
+
+── Chunking
+── Embedding
+── pgvector semantic search
+── top-k chunks
+── answer with citations
+
+Keep the interfaces for future extensions：
+Retriever
+    ├── Hybrid Search
+    ├── Re-ranker
+    ├── Query Rewriter
+    └── ACL Filter
+
+Expose KnowledgeService to the agent through a search_knowledge tool adapter.
+KnowledgeService remains an independent application service and is not implemented inside the tool.
+
+Requirements:
+
+* Citation support
+* Show source chunks
+* Do not make up information
+
+---
+
+# Workflow
+
+Allow one active workflow per conversation.
+If the user starts another workflow, ask whether to cancel the current workflow first.
+
+
+---
+
+# Create ticket workflow
+LLM identify if user wants to submit a ticket or not. LLM determines ticket type and collects user information. Workflow engine determines what questions to ask depending on ticket type.
+
+Flow:
+User message
+    ↓
+LLM identifies if user wants to submit ticket
+    ↓
+LLM identify ticket type
+    ├── software_request
+    ├── hardware_request
+    └── incident_ticket
+    ↓
+Load corresponding questionnaire configuration
+    ↓
+LLM extract information from user's message and user's personal data
+    ↓
+workflow engine check what information is missing
+    ↓
+workflow asks for missing information
+    ↓
+all information collected
+    ↓
+show ticket summary to user
+    ↓
+waiting for user's confirmation
+    ↓
+call create_ticket tool
+
+LLM output:
+{
+ "intent":"...",
+ "ticket_type": "...",
+ "confidence": 0.96,
+ "extracted_fields":{
+	"software_name":"...",
+        "device_name":"...",
+        "business_justification":"..."
+}
+
+}
+
+Write yaml files for different types of request:
+backend/
+└── app/
+    └── workflows/
+        └── ticket/
+            ├── engine.py
+            ├── state.py
+            └── questionnaires/
+                ├── software_request.yaml
+                ├── hardware_request.yaml
+                └── incident_ticket.yaml
+hardware_request.yaml:
+ticket_type: hardware_request
+
+fields:
+  - name: requested_item
+    question: What hardware item do you need?
+    required: true
+
+  - name: business_justification
+    question: Why do you need this hardware?
+    required: true
+
+  - name: urgency
+    question: How urgent is this request?
+    required: true
+
+  - name: delivery_location
+    question: Where should the hardware be delivered?
+    required: true
+
+software_request.yaml:
+ticket_type: software_request
+
+fields:
+  - name: software_name
+    question: What software do you need?
+    required: true
+
+  - name: business_justification
+    question: How will you use this software?
+    required: true
+
+  - name: device_name
+    question: Which device should it be installed on?
+    required: true
+
+  - name: manager_approval
+    question: Has your manager approved this request?
+    required: true
+
+incident_ticket.yaml:
+ticket_type: incident_ticket
+
+fields:
+  - name: issue_description
+    question: Briefly describe the issue.
+    required: true
+
+  - name: affected_service
+    question: Which application or device is affected?
+    required: true
+
+  - name: started_at
+    question: When did the issue begin?
+    required: true
+
+  - name: impact
+    question: How is this issue affecting your work?
+    required: true
+
+  - name: error_message
+    question: Do you see an error message?
+    required: false
+
+Save workflow state in table workflow_runs so that workflow engine can determine what information is missed by comparing questionnaire and current collected information.
+
+---
+
+# Tool Registry
+
+Create a centralized tool registry.
+
+Example:
+
+tools/
+Create_a_ticket.py
+Check_a_ticket.py
+
+
+Each tool must include:
+
+* name
+* description
+* input_schema
+* execute()
+* is_write_operation
+* requires_confirmation
+
+The agent dynamically selects tools through OpenAI tool calling.
+
+---
+
+# Tool 1: Create A Ticket
+
+Purpose:
+
+Allow users to submit a ticket through the chat.
+
+Response:
+{
+  "conversation_id":"...",
+  "status": "Success/Failed“,
+  "ticket_id": "...",
+  "workflow": {
+    "workflow_run_id": "...",
+    "workflow_type": "create_ticket",
+    "status": "...",
+    }
+}
+
+Requirements:
+* Use local ticket repository
+* If ticket creation fails:
+- Keep the workflow state.
+- Inform the user that the submission failed.
+- Ask whether the user would like to retry later.
+
+---
+
+# Tool 2: Check A Ticket
+
+Purpose:
+
+Allow users to check ticket status through the chat.
+
+Example:
+
+"What's the status of my latest ticket?"
+
+Response:
+{
+  "conversation_id":"...",
+  "ticket_status": "...“,
+  "ticket_id": "...",
+  "workflow": {
+    "workflow_run_id": "...",
+    "workflow_type": "check_ticket",
+    "status": "...",
+    }
+}
+
+---
+
+
+
+# Database Schema
+
+Create SQLAlchemy models.
+
+Include:
+
+## User
+- User_ID
+- Email
+- Full_name
+
+## Conversation
+- Conversation_ID
+- User_ID
+- Status
+- Created_at
+
+## Message
+- Message_ID
+- Role
+- Content
+- Conversation_ID
+- Time
+
+## Knowledge Document
+- Document_ID
+- Title
+- Created_at
+- Updated_at
+- file_name
+- file_type
+- storage_path
+- index_status
+- error_message
+
+## Toolcall
+- Action_ID
+- Tool_Name
+- Status
+- Latency
+
+## Ticket
+- Ticket_ID
+- Submitted_by
+- Request_type
+- Request_for
+- Business_Justification
+- Description
+- Priority
+- Assigned_to
+- Status
+- Comments
+- Created_at
+- Updated_at
+
+## DocumentChunk
+- chunk_id
+- document_id
+- content
+- chunk_index
+- embedding
+- page_number
+- metadata
+- created_at
+
+## workflow_runs
+- id
+- conversation_id
+- workflow_type
+- status
+- state JSONB
+- created_at
+- updated_at
+
+
+Generate migrations.
+
+---
+
+# Chat API Response
+Frontend should know workflow detail if there is an active one.
+Response:
+{
+  "message": {
+    "message_id": "...",
+    "role": "assistant",
+    "content": "..."
+  },
+  "sources": [],
+  "tool_calls": [],
+  "workflow": {
+    "workflow_run_id": "...",
+    "type": "create_ticket",
+    "status": "collecting_information",
+    "current_field": "business_justification"
+  }
+}
+
+workflow could be null if it's inactive.
+
+---
+
+# API Design
+
+Create REST APIs.
+
+1. Knowledge
+
+Internal API. Retrieve knowledge from knowledge base.
+
+Endpoint: GET /knowledge/search
+
+
+Response
+
+```json
+{
+  "results":[
+    {
+      "document_id":"...",
+      "title":"...",
+      "content":"...",
+      "score":0.93
+    }
+  ]
+}
+```
+
+Status Codes
+
+
+| Code | Description         |
+| ---- | ------------------- |
+| 200  | Success             |
+| 404  | Not found           |
+
+
+---
+
+2. Ticket
+
+Create ticket - Create a new IT support ticket
+
+Endpoint: POST /tickets
+
+
+Request
+
+```json
+{
+  "request_type": "...",
+  "request_for": "...",
+  "business_justification": "...",
+  "description": "...",
+  "priority": "...",
+  "created_at": "..."
+}
+```
+
+Response
+
+```json
+{
+  "ticket_id": {...},
+  "status": {...}
+}
+```
+
+Status Codes
+
+
+| Code | Description         |
+| ---- | ------------------- |
+| 201  | Resource Created    |
+| 400  | Bad request         |
+
+
+---
+
+Check ticket - User look up a ticket
+
+Endpoint: GET /tickets/{ticket_id}
+
+
+Response
+
+```json
+{
+  "request_type": "...",
+  "request_for": "...",
+  "business_justification": "...",
+  "description": "...",
+  "priority": "...",
+  "created_at": "...",
+  "assigned_to": "...",
+  "updated_at": "...",
+  "comments": "..."
+}
+```
+
+Status Codes
+
+
+| Code | Description         |
+| ---- | ------------------- |
+| 200  | Success             |
+| 404  | Not found           |
+
+
+---
+
+3. Conversation
+
+Create conversation - Create a new conversation and send user the first message
+
+Endpoint: POST /conversations
+
+
+Request
+
+```json
+{
+  "message_content": "..."
+}
+```
+
+Response
+
+```json
+{
+  "conversation_id":"...",
+  "message_id":"...",
+  "role":"assistant",
+  "content":"..."
+}
+```
+
+Status Codes
+
+
+| Code | Description         |
+| ---- | ------------------- |
+| 201  | Resource created    |
+
+
+---
+
+Check conversation - Get one conversation history.
+
+Endpoint: GET /conversations/{conversation_id}
+
+Response
+
+```json
+{
+  "conversation_id":"...",
+  "messages": [
+{ "message_id":"...",
+  "role":"...",
+  "content":"...",
+  "created_at":"..."
+
+}, {"message_id":"...",
+  "role":"...",
+  "content":"...",
+  "created_at":"..."
+
+}
+]
+}
+
+Status Codes
+
+
+| Code | Description         |
+| ---- | ------------------- |
+| 200  | Success             |
+| 404  | Not found           |
+
+
+---
+Get all conversation - Get a list of all conversations of current user
+
+Endpoint: GET /conversations
+
+
+Response
+
+```json
+{
+  "conversations":[]
+}
+```
+
+Status Codes
+
+
+| Code | Description         |
+| ---- | ------------------- |
+| 200  | Success             |
+
+
+---
+
+Send message - Send a user message to AI agent.
+
+Endpoint: POST /conversations/{conversation_id}/messages 
+
+Request
+
+```json
+{
+  "role": "user",
+  "message_content": "..."
+}
+```
+
+Response
+
+```json
+{
+  "message_id":"...",
+  "role":"assistant",
+  "content": "...",
+  "sources": {...},
+  "tool_calls":[...],
+  "conversation_id":"...",
+  "created_at":"..."
+}
+```
+
+Status Codes
+
+
+| Code | Description         |
+| ---- | ------------------- |
+| 200  | Success             |
+| 404  | Not found           |
+
+
+---
+
+# Frontend Pages
+
+Create:
+
+/chat
+/tickets
+
+Provide responsive UI.
+
+Use modern dashboard layout.
+
+---
+# Do not implement these capabilities. Keep current interfaces extensible enough to add them later.
+
+* Login
+* OAuth
+* JWT
+* SSO
+* Observability
+* Deployment Diagram
+* Docker Compose
+* Kubernetes（Optional）
+* CI/CD
+* Nginx
+* HTTPS
+* Secrets
+* Monitoring
+* Scaling
+* High Availability
+---
+
+# Important Engineering Requirements
+
+Generate working code.
+
+Use clean architecture.
+
+Use dependency injection.
+
+Use typing everywhere.
+
+Use async FastAPI patterns.
+
+Use environment variables.
+
+Include tests.
+
+The result should look like a real internal enterprise AI platform that could be shown during an AI Engineer interview.
+
+
+
