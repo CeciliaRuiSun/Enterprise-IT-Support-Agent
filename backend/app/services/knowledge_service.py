@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.common import DocumentChunk
@@ -55,12 +56,15 @@ class KnowledgeService:
             ]
             return KnowledgeSearchResult(query=query, chunks=chunks)
 
-        stmt = (
-            select(DocumentChunk)
-            .where(DocumentChunk.content.ilike(f"%{query}%"))
-            .order_by(DocumentChunk.created_at.desc())
-            .limit(top_k)
-        )
+        terms = [
+            term
+            for term in re.findall(r"[a-z0-9]+", query.lower())
+            if len(term) >= 3 and term not in {"the", "and", "how", "what", "can", "for"}
+        ]
+        predicates = [DocumentChunk.content.ilike(f"%{term}%") for term in terms] or [
+            DocumentChunk.content.ilike(f"%{query}%")
+        ]
+        stmt = select(DocumentChunk).where(or_(*predicates)).order_by(DocumentChunk.created_at.desc()).limit(top_k)
         rows = (await self.db.scalars(stmt)).all()
         chunks = [
             KnowledgeChunk(

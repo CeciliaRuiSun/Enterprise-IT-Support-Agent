@@ -5,17 +5,30 @@ import type {
   SendMessageResponse
 } from "@/types";
 
-const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
+const publicBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/backend-api";
+const baseUrl =
+  typeof window === "undefined" && publicBaseUrl.startsWith("/")
+    ? process.env.BACKEND_API_BASE_URL ?? "http://127.0.0.1:8000/api/v1"
+    : publicBaseUrl;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    },
-    cache: "no-store"
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers ?? {})
+      },
+      cache: "no-store"
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`Cannot reach the backend at ${baseUrl}. Start the FastAPI server and try again.`);
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -50,4 +63,3 @@ export async function sendMessage(
     body: JSON.stringify({ role: "user", message_content: messageContent })
   });
 }
-

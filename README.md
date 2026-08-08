@@ -19,7 +19,7 @@ alembic upgrade head
 python -m uvicorn app.main:app --reload
 ```
 
-The database container exposes Postgres on `localhost:5432` with the default credentials from `backend/.env.example`.
+The database container exposes Postgres on `localhost:5432` with the default credentials from `backend/.env`.
 
 ## Frontend
 
@@ -29,11 +29,22 @@ pnpm install
 pnpm dev
 ```
 
+## Testing
+
+Run the regression suite from the repository root:
+
+```bash
+./backend/.venv/bin/python -m pytest
+```
+
+The suite covers agent intent cases, ticket workflows, API contracts, and OpenAI fallback behavior without requiring OpenAI credits or a running PostgreSQL container.
+
 ## Environment
 
 - `backend/.env` should provide `DATABASE_URL` and optionally `OPENAI_API_KEY`
 - The backend expects PostgreSQL to be running at `DATABASE_URL` before you use DB-backed endpoints
-- `frontend/.env.local` should provide `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1`
+- `frontend/.env` should provide `NEXT_PUBLIC_API_BASE_URL=/backend-api` and
+  `BACKEND_API_BASE_URL=http://127.0.0.1:8000/api/v1`
 
 ## Knowledge ingestion
 

@@ -13,6 +13,7 @@ body {
 
 body {
   margin: 0;
+  overflow: hidden;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   background:
     radial-gradient(circle at top left, rgba(34, 193, 195, 0.16), transparent 26%),
@@ -39,4 +40,3 @@ body {
   background: rgba(217, 226, 241, 0.16);
   border-radius: 999px;
 }
-

@@ -9,6 +9,19 @@ type Props = {
   initialConversations: ConversationListItem[];
 };
 
+function getLatestConversation(conversations: ConversationListItem[]) {
+  return conversations.reduce<ConversationListItem | null>((latest, conversation) => {
+    if (!latest) return conversation;
+
+    const latestTimestamp = new Date(latest.updated_at || latest.created_at).getTime();
+    const conversationTimestamp = new Date(
+      conversation.updated_at || conversation.created_at
+    ).getTime();
+
+    return conversationTimestamp > latestTimestamp ? conversation : latest;
+  }, null);
+}
+
 function MessageBubble({ message }: { message: MessageItem }) {
   const isAssistant = message.role === "assistant";
 
@@ -65,16 +78,16 @@ function MessageBubble({ message }: { message: MessageItem }) {
 export function ChatPanel({ initialConversations }: Props) {
   const [conversationList, setConversationList] = useState<ConversationListItem[]>(initialConversations);
   const [conversationId, setConversationId] = useState<string | null>(
-    initialConversations[0]?.conversation_id ?? null
+    getLatestConversation(initialConversations)?.conversation_id ?? null
   );
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("Ready");
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setConversationList(initialConversations);
-    setConversationId(initialConversations[0]?.conversation_id ?? null);
+    setConversationId(getLatestConversation(initialConversations)?.conversation_id ?? null);
   }, [initialConversations]);
 
   useEffect(() => {
@@ -106,8 +119,18 @@ export function ChatPanel({ initialConversations }: Props) {
   }, [conversationId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  function handleNewConversation() {
+    setConversationId(null);
+    setMessages([]);
+    setInput("");
+    setStatus("Ready");
+  }
 
   async function handleSend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,6 +140,14 @@ export function ChatPanel({ initialConversations }: Props) {
     setInput("");
     setStatus("Thinking...");
 
+    const userMessage: MessageItem = {
+      message_id: `temp-${Date.now()}`,
+      role: "user",
+      content: trimmed,
+      created_at: new Date().toISOString()
+    };
+    setMessages((current) => (conversationId ? [...current, userMessage] : [userMessage]));
+
     try {
       if (!conversationId) {
         const created = await createConversation(trimmed);
@@ -125,13 +156,6 @@ export function ChatPanel({ initialConversations }: Props) {
         const conversation = await getConversation(created.conversation_id);
         setMessages(conversation.messages);
       } else {
-        const userMessage: MessageItem = {
-          message_id: `temp-${Date.now()}`,
-          role: "user",
-          content: trimmed,
-          created_at: new Date().toISOString()
-        };
-        setMessages((current) => [...current, userMessage]);
         const result = await sendMessage(conversationId, trimmed);
         setMessages((current) => [
           ...current,
@@ -155,8 +179,8 @@ export function ChatPanel({ initialConversations }: Props) {
   const selectedConversation = conversationList.find((conversation) => conversation.conversation_id === conversationId);
 
   return (
-    <div className="grid min-h-[calc(100vh-2rem)] grid-rows-[auto_1fr_auto] rounded-[32px] border border-white/10 bg-ink-950/80 shadow-glow">
-      <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[32px] border border-white/10 bg-ink-950/80 shadow-glow">
+      <div className="flex flex-none items-center justify-between border-b border-white/10 px-6 py-4">
         <div>
           <div className="text-xs uppercase tracking-[0.28em] text-teal-500">Enterprise IT Support Agent</div>
           <h1 className="mt-1 text-xl font-semibold text-white">
@@ -168,9 +192,17 @@ export function ChatPanel({ initialConversations }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-6 overflow-hidden px-6 py-6 lg:grid-cols-[280px_1fr]">
-        <aside className="rounded-[28px] border border-white/10 bg-black/15 p-4">
+      <div className="grid min-h-0 grid-rows-[minmax(0,auto)_minmax(0,1fr)] gap-6 overflow-hidden px-6 py-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:grid-rows-1">
+        <aside className="min-h-0 max-h-[24vh] overflow-y-auto rounded-[28px] border border-white/10 bg-black/15 p-4 lg:max-h-none">
           <div className="mb-4 text-xs uppercase tracking-[0.28em] text-slate-400">Conversation list</div>
+          <button
+            type="button"
+            onClick={handleNewConversation}
+            className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-teal-500/30 bg-teal-500/10 px-4 py-3 text-sm font-semibold text-teal-300 transition hover:bg-teal-500/20"
+          >
+            <span aria-hidden="true" className="text-lg leading-none">+</span>
+            New Conversation
+          </button>
           <div className="space-y-2">
             {conversationList.length ? (
               conversationList.map((conversation) => (
@@ -198,8 +230,8 @@ export function ChatPanel({ initialConversations }: Props) {
           </div>
         </aside>
 
-        <section className="flex min-h-[56vh] flex-col rounded-[28px] border border-white/10 bg-black/15">
-          <div className="scrollbar flex-1 space-y-4 overflow-y-auto p-5">
+        <section className="flex min-h-0 flex-col rounded-[28px] border border-white/10 bg-black/15">
+          <div ref={messagesContainerRef} className="scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
             {messages.length ? (
               messages.map((message) => <MessageBubble key={message.message_id} message={message} />)
             ) : (
@@ -207,7 +239,6 @@ export function ChatPanel({ initialConversations }: Props) {
                 Ask about VPN, printers, software access, or request a ticket.
               </div>
             )}
-            <div ref={bottomRef} />
           </div>
 
           <form onSubmit={handleSend} className="border-t border-white/10 p-4">
