@@ -14,6 +14,6 @@ fields:
     required: false
 
   - name: urgency
-    question: How urgent is this request?
+    question: How urgent is this request?(1-5, 1 is not urgent, 5 is very urgent)
     required: true
 

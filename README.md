@@ -19,7 +19,7 @@ alembic upgrade head
 python -m uvicorn app.main:app --reload
 ```
 
-The database container exposes Postgres on `localhost:5432` with the default credentials from `backend/.env`.
+The database container exposes Postgres on `localhost:5432` with the default credentials from `backend/.env`. After migrations run, the backend automatically indexes supported files from the repository's `Knowledge Base/` folder.
 
 ## Frontend
 
@@ -48,4 +48,13 @@ The suite covers agent intent cases, ticket workflows, API contracts, and OpenAI
 
 ## Knowledge ingestion
 
-Upload a PDF, DOCX, or TXT file through `POST /api/v1/knowledge/documents` to add searchable chunks.
+Supported files in `Knowledge Base/` (`.docx`, `.pdf`, `.txt`, and `.md`) are indexed automatically when the backend starts. Existing files are skipped on later starts.
+
+To sync the folder manually:
+
+```bash
+cd backend
+./.venv/bin/python scripts/seed_knowledge_base.py
+```
+
+You can also upload a PDF, DOCX, or TXT file through `POST /api/v1/knowledge/documents` to add searchable chunks.

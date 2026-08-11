@@ -2,7 +2,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.common import Conversation, WorkflowRun, WorkflowStatus
+from app.models.common import Conversation, Ticket, WorkflowRun, WorkflowStatus
 from app.services.workflow_service import WorkflowService
 
 
@@ -56,6 +56,35 @@ async def test_continue_workflow_collects_the_answer(offline_intent_classifier, 
 
     assert result.tool_calls[0]["tool"] == "collect_workflow_field"
     assert workflow.state["collected_fields"]["issue_summary"] == "The printer is offline"
+
+
+@pytest.mark.asyncio
+async def test_ticket_status_returns_ticket_details(offline_intent_classifier, monkeypatch):
+    session = FakeSession()
+    service = WorkflowService(session)
+    conversation = Conversation(id=uuid4())
+    ticket = Ticket(
+        id=uuid4(),
+        ticket_number="REQ-000001",
+        request_type="hardware_request",
+        status="open",
+        priority="high",
+        description="New monitor requested",
+    )
+
+    class TicketLookup:
+        async def get_ticket(self, ticket_id):
+            return ticket if ticket_id in {ticket.id, ticket.ticket_number} else None
+
+    service.ticket_service = TicketLookup()
+    monkeypatch.setattr(service, "get_active_workflow", lambda _: _async_value(None))
+
+    result = await service.respond(conversation, f"Check my ticket status: {ticket.ticket_number}")
+
+    assert result.tool_calls == [{"tool": "get_ticket_status", "ticket_id": ticket.ticket_number, "found": True}]
+    assert f"Ticket {ticket.ticket_number}" in result.content
+    assert f"Status: {ticket.status}" in result.content
+    assert "New monitor requested" in result.content
 
 
 async def _async_value(value):

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,13 +7,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.db.session import async_session_maker
+from app.services.document_ingestion import DocumentIngestionService
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    if settings.enable_demo_seed:
+        try:
+            async with async_session_maker() as session:
+                service = DocumentIngestionService(session)
+                ingested = await service.sync_knowledge_base()
+                await session.commit()
+                logger.info("Knowledge base ready; indexed %d new document(s).", len(ingested))
+        except Exception:
+            logger.exception("Knowledge-base sync failed; continuing without new local documents.")
     yield
 
 

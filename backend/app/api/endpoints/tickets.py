@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +23,7 @@ async def create_ticket(
     await db.commit()
     return TicketResponse(
         ticket_id=ticket.id,
+        ticket_number=ticket.ticket_number,
         request_type=ticket.request_type,
         status=ticket.status,
         priority=ticket.priority,
@@ -36,14 +35,15 @@ async def create_ticket(
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
 async def get_ticket(
-    ticket_id: UUID,
+    ticket_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> TicketResponse:
-    ticket = await db.get(Ticket, ticket_id)
+    ticket = await TicketService(db).get_ticket(ticket_id)
     if ticket is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket not found")
     return TicketResponse(
         ticket_id=ticket.id,
+        ticket_number=ticket.ticket_number,
         request_type=ticket.request_type,
         status=ticket.status,
         priority=ticket.priority,
@@ -51,4 +51,3 @@ async def get_ticket(
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
     )
-

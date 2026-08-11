@@ -5,6 +5,8 @@ export interface ConversationListItem {
   conversation_id: string;
   title?: string | null;
   status: ConversationStatus;
+  is_pinned: boolean;
+  is_archived: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -52,4 +54,3 @@ export interface ToolCall {
   tool: string;
   [key: string]: unknown;
 }
-

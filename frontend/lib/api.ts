@@ -35,6 +35,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(errorText || `Request failed: ${response.status}`);
   }
 
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
   return (await response.json()) as T;
 }
 
@@ -62,4 +66,20 @@ export async function sendMessage(
     method: "POST",
     body: JSON.stringify({ role: "user", message_content: messageContent })
   });
+}
+
+export async function pinConversation(conversationId: string): Promise<ConversationListItem> {
+  return request<ConversationListItem>(`/conversations/${conversationId}/pin`, { method: "POST" });
+}
+
+export async function unpinConversation(conversationId: string): Promise<ConversationListItem> {
+  return request<ConversationListItem>(`/conversations/${conversationId}/pin`, { method: "DELETE" });
+}
+
+export async function closeConversation(conversationId: string): Promise<ConversationListItem> {
+  return request<ConversationListItem>(`/conversations/${conversationId}/close`, { method: "POST" });
+}
+
+export async function deleteConversation(conversationId: string): Promise<void> {
+  await request<void>(`/conversations/${conversationId}`, { method: "DELETE" });
 }

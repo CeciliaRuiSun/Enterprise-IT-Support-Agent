@@ -15,10 +15,10 @@ class TicketCreateRequest(BaseModel):
 
 class TicketResponse(BaseModel):
     ticket_id: UUID
+    ticket_number: str
     request_type: str
     status: str
     priority: str
     description: str | None = None
     created_at: datetime
     updated_at: datetime
-

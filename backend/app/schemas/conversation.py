@@ -24,6 +24,8 @@ class ConversationListItem(ORMBaseModel):
     conversation_id: UUID
     title: str | None = None
     status: ConversationStatus
+    is_pinned: bool
+    is_archived: bool
     created_at: datetime
     updated_at: datetime
 
@@ -58,4 +60,3 @@ class SendMessageResponse(ORMBaseModel):
     created_at: datetime
     citations: list[dict] | None = None
     tool_calls: list[dict] | None = None
-

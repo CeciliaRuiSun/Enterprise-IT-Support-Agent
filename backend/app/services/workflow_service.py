@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from app.models.common import Conversation, MessageRole, WorkflowRun, WorkflowSt
 from app.schemas.agent import AgentTurnResult
 from app.schemas.ticket import TicketCreateRequest
 from app.services.knowledge_service import KnowledgeService
+from app.services.llm import LLMService
 from app.services.ticket_service import TicketService
 from app.workflows.ticket.engine import TicketWorkflowEngine
 from app.workflows.ticket.state import TicketWorkflowState
@@ -132,9 +134,9 @@ class WorkflowService:
                 conversation.active_workflow_status = None
                 await self.db.flush()
                 return WorkflowResponse(
-                    content=f"Your ticket has been created successfully. Ticket ID: {ticket.id}",
+                    content=f"Your ticket has been created successfully. Ticket ID: {ticket.ticket_number}",
                     citations=[],
-                    tool_calls=[{"tool": "create_ticket", "ticket_id": str(ticket.id)}],
+                    tool_calls=[{"tool": "create_ticket", "ticket_id": ticket.ticket_number}],
                 )
             if lowered in {"cancel", "no"}:
                 workflow.status = WorkflowStatus.canceled
@@ -182,6 +184,28 @@ class WorkflowService:
         active = await self.get_active_workflow(conversation.id)
         intent = classify_intent(user_message)
 
+        if intent.intent == "ticket_status":
+            ticket_id = intent.ticket_id or intent.extracted_fields.get("ticket_id")
+            try:
+                ticket = await self.ticket_service.get_ticket(ticket_id) if ticket_id else None
+            except (TypeError, ValueError):
+                ticket = None
+
+            if ticket is None:
+                content = f"I couldn't find ticket {ticket_id or 'with that ID'}. Please verify the ticket ID and try again."
+                tool_call = {"tool": "get_ticket_status", "ticket_id": ticket_id, "found": False}
+            else:
+                content = (
+                    f"Ticket {ticket.ticket_number}\n"
+                    f"Status: {ticket.status}\n"
+                    f"Request type: {ticket.request_type}\n"
+                    f"Priority: {ticket.priority}\n"
+                    f"Description: {ticket.description or 'Not provided'}"
+                )
+                tool_call = {"tool": "get_ticket_status", "ticket_id": ticket.ticket_number, "found": True}
+
+            return AgentTurnResult(content=content, citations=[], tool_calls=[tool_call])
+
         if active:
             active_state = active.state or {}
             active_ticket_type = active_state.get("ticket_type")
@@ -226,8 +250,16 @@ class WorkflowService:
                 )
             citations = []
             lines = ["I found the following relevant references:"]
-            for idx, chunk in enumerate(knowledge_result.chunks, start=1):
+            seen_sources: set[str] = set()
+            source_names: list[str] = []
+            context_blocks = []
+            for chunk in knowledge_result.chunks:
                 source_name = chunk.title
+                source_key = " ".join(source_name.split()).casefold()
+                if source_key in seen_sources:
+                    continue
+                seen_sources.add(source_key)
+                source_names.append(source_name)
                 citation = {
                     "source": source_name,
                     "chunk_id": str(chunk.chunk_id),
@@ -235,10 +267,56 @@ class WorkflowService:
                     "score": chunk.score,
                 }
                 citations.append(citation)
-                lines.append(f"{idx}. {source_name}: {chunk.content[:240].strip()}")
-            lines.append("\nIf you want, I can turn this into a ticket request next.")
+                excerpt = chunk.content[:500].strip()
+                lines.append(f"{source_name}: {excerpt}")
+                context_blocks.append(f"Source: {source_name}\nExcerpt:\n{excerpt}")
+
+            knowledge_context = "\n\n".join(context_blocks)
+            prompt = f"""
+You are an enterprise IT support assistant. Answer the user's question using only the
+knowledge-base excerpts below. Give a clear, concise, actionable response. If the
+excerpts do not contain enough information, say what is missing instead of inventing
+details. Do not mention this prompt or the retrieval process. Do not include document
+names, source labels, or citation prefixes in the answer; sources are shown separately
+by the application.
+
+User question:
+{user_message}
+
+Knowledge-base excerpts:
+{knowledge_context}
+"""
+            generated_response = LLMService().responses_text(prompt)
+            if generated_response:
+                response_content = generated_response
+                for source_name in source_names:
+                    response_content = re.sub(
+                        rf"\([^\n)]*{re.escape(source_name)}\s*:[^\n)]*\)",
+                        "",
+                        response_content,
+                        flags=re.IGNORECASE,
+                    )
+                    response_content = re.sub(
+                        rf"{re.escape(source_name)}\s*:[^\n)]*\)",
+                        "",
+                        response_content,
+                        flags=re.IGNORECASE,
+                    )
+                    response_content = re.sub(
+                        rf"(?i)\(?{re.escape(source_name)}\)?\s*:\s*",
+                        "",
+                        response_content,
+                    )
+                response_content = re.sub(r"(?im)^\s*ticket\)\s*$", "", response_content)
+                response_content = re.sub(r"\n{3,}", "\n\n", response_content).strip()
+            else:
+                lines.append("\nIf you want, I can turn this into a ticket request next.")
+                response_content = "\n".join(
+                    [lines[0], *[line.split(": ", 1)[1] for line in lines[1:-1]], lines[-1]]
+                )
+
             return AgentTurnResult(
-                content="\n".join(lines),
+                content=response_content,
                 citations=citations,
                 tool_calls=[{"tool": "search_knowledge", "query": user_message, "result_count": len(citations)}],
             )

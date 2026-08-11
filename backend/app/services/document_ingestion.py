@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import BinaryIO
-from uuid import UUID
 
 from docx import Document
 from pypdf import PdfReader
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.common import DocumentChunk, KnowledgeDocument
@@ -22,9 +21,42 @@ class ParsedDocument:
 
 
 class DocumentIngestionService:
+    supported_suffixes = {".txt", ".md", ".docx", ".pdf"}
+
     def __init__(self, db: AsyncSession, embedding_service: EmbeddingService | None = None) -> None:
         self.db = db
         self.embedding_service = embedding_service or EmbeddingService()
+
+    @staticmethod
+    def default_knowledge_base_dir() -> Path:
+        return Path(__file__).resolve().parents[3] / "Knowledge Base"
+
+    @classmethod
+    def knowledge_base_files(cls, directory: Path | None = None) -> list[Path]:
+        knowledge_base_dir = directory or cls.default_knowledge_base_dir()
+        if not knowledge_base_dir.exists():
+            raise FileNotFoundError(f"Knowledge Base directory not found: {knowledge_base_dir}")
+        return sorted(
+            path
+            for path in knowledge_base_dir.iterdir()
+            if path.is_file()
+            and not path.name.startswith((".", "~$"))
+            and path.suffix.lower() in cls.supported_suffixes
+        )
+
+    async def sync_knowledge_base(self, directory: Path | None = None) -> list[KnowledgeDocument]:
+        """Index local knowledge-base files that are not already in the database."""
+        existing_paths = set(
+            (await self.db.scalars(select(KnowledgeDocument.source_path))).all()
+        )
+        ingested: list[KnowledgeDocument] = []
+
+        for path in self.knowledge_base_files(directory):
+            if path.name in existing_paths:
+                continue
+            ingested.append(await self.ingest_bytes(path.read_bytes(), path.name, title=path.stem))
+
+        return ingested
 
     def _chunk_text(self, text: str, max_chars: int = 1000, overlap: int = 120) -> list[str]:
         cleaned = "\n".join(line.strip() for line in text.splitlines()).strip()
@@ -85,4 +117,3 @@ class DocumentIngestionService:
 
         await self.db.flush()
         return document
-

@@ -24,16 +24,7 @@ class LLMService:
         self.client = OpenAI(api_key=settings.openai_api_key, max_retries=0) if settings.openai_api_key else None
 
     def responses_json(self, prompt: str) -> LLMJsonResult:
-        if not self.client:
-            return LLMJsonResult(raw_text="", payload=None)
-
-        try:
-            response = self.client.responses.create(model=self.model, input=prompt)
-        except OpenAIError as exc:
-            logger.warning("OpenAI response unavailable; using local fallback: %s", exc)
-            return LLMJsonResult(raw_text="", payload=None)
-
-        raw_text = getattr(response, "output_text", "") or ""
+        raw_text = self.responses_text(prompt)
         if not raw_text:
             return LLMJsonResult(raw_text="", payload=None)
 
@@ -48,3 +39,15 @@ class LLMService:
                 except json.JSONDecodeError:
                     return LLMJsonResult(raw_text=raw_text, payload=None)
             return LLMJsonResult(raw_text=raw_text, payload=None)
+
+    def responses_text(self, prompt: str) -> str | None:
+        if not self.client:
+            return None
+
+        try:
+            response = self.client.responses.create(model=self.model, input=prompt)
+        except OpenAIError as exc:
+            logger.warning("OpenAI response unavailable; using local fallback: %s", exc)
+            return None
+
+        return (getattr(response, "output_text", "") or "").strip() or None

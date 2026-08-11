@@ -23,6 +23,15 @@ class FailingClient:
     embeddings = FailingEmbeddings()
 
 
+class TextResponses:
+    def create(self, **kwargs):
+        return type("Response", (), {"output_text": "Generated answer"})()
+
+
+class TextClient:
+    responses = TextResponses()
+
+
 def test_llm_service_returns_empty_result_when_provider_is_unavailable():
     service = LLMService.__new__(LLMService)
     service.model = "test-model"
@@ -31,6 +40,14 @@ def test_llm_service_returns_empty_result_when_provider_is_unavailable():
     result = service.responses_json("classify this")
 
     assert result == LLMJsonResult(raw_text="", payload=None)
+
+
+def test_llm_service_returns_plain_text_response():
+    service = LLMService.__new__(LLMService)
+    service.model = "test-model"
+    service.client = TextClient()
+
+    assert service.responses_text("answer this") == "Generated answer"
 
 
 def test_embedding_service_returns_none_when_provider_is_unavailable():
