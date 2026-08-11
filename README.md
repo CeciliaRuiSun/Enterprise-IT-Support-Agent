@@ -1,6 +1,6 @@
 # Enterprise IT Support Agent
 
-MVP scaffold for an enterprise-oriented IT support agent with:
+An enterprise-oriented IT support agent with:
 
 - FastAPI backend
 - PostgreSQL + SQLAlchemy + Alembic

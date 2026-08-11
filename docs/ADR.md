@@ -6,6 +6,7 @@
 ---
 
 # ADR-001: V1 Hybrid IT Support Agent
+
 Agent is Orchestrator
 **With:**
 
@@ -32,9 +33,101 @@ Human escalation
 
 ```
 
-
-# ADR-003: 
 Knowledge Retrieval as a standalone subsystem
 Workflow engine as a standalone subsystem
 
-# ADR-004: Reason → Act → Observe → Reason
+# ADR-003: Create ticket workflow
+```
+User message
+
+    ↓
+
+LLM identifies if user wants to submit ticket
+
+    ↓
+
+LLM identify ticket type
+
+    ├── software_request
+
+    ├── hardware_request
+
+    └── incident_ticket
+
+    ↓
+
+Load corresponding questionnaire configuration
+
+    ↓
+
+LLM extract information from user's message and user's personal data
+
+    ↓
+
+workflow engine check what information is missing
+
+    ↓
+
+workflow asks for missing information
+
+    ↓
+
+all information collected
+
+    ↓
+
+show ticket summary to user
+
+    ↓
+
+waiting for user's confirmation
+
+    ↓
+
+call create_ticket tool
+```
+
+# ADR-004: Authentication
+Use Microsoft Entra tenant. Agent authenticate via Microsoft Entra ID. Then validate token.
+```
+Employee
+    │
+    │ Click "Sign in with Microsoft"
+    ▼
+Next.js
+    │
+    │ Redirect
+    ▼
+Microsoft Entra ID
+    │
+    │ Login
+    │
+    │ Returns authorization result
+    ▼
+Next.js / MSAL
+    │
+    │ obtains Access Token
+    ▼
+POST /api/v1/conversations
+Authorization: Bearer eyJ...
+    │
+    ▼
+FastAPI
+    │
+    │ Validate JWT
+    ▼
+CurrentUser
+{
+    "entra_user_id": "...",
+    "email": "cecilia@yourtenant.onmicrosoft.com",
+    "name": "Cecilia Sun",
+    "roles": ["employee"]
+}
+    │
+    ▼
+AgentContext
+    │
+    ▼
+IT Agent
+```
+
