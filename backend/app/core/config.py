@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-4.1-mini"
     openai_embeddings_model: str = "text-embedding-3-small"
+    entra_tenant_id: str | None = None
+    entra_api_client_id: str | None = None
+    entra_required_scope: str = "access_as_user"
     max_history_messages: int = 24
     default_user_email: str = "employee@example.com"
     default_user_full_name: str = "Enterprise Employee"
@@ -27,4 +30,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-

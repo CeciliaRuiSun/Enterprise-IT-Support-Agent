@@ -8,6 +8,8 @@
     "start": "next start"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.18.0",
+    "@azure/msal-react": "^5.5.5",
     "next": "15.1.6",
     "react": "19.0.0",
     "react-dom": "19.0.0"
@@ -22,4 +24,3 @@
     "typescript": "^5.7.2"
   }
 }
-

@@ -5,6 +5,18 @@ import type {
   SendMessageResponse
 } from "@/types";
 
+type AccessTokenProvider = (forceRefresh?: boolean) => Promise<string | null>;
+
+let accessTokenProvider: AccessTokenProvider | null = null;
+let meRequest: Promise<MeResponse> | null = null;
+
+export function registerAccessTokenProvider(provider: AccessTokenProvider) {
+  accessTokenProvider = provider;
+  return () => {
+    if (accessTokenProvider === provider) accessTokenProvider = null;
+  };
+}
+
 const publicBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/backend-api";
 const baseUrl =
   typeof window === "undefined" && publicBaseUrl.startsWith("/")
@@ -13,16 +25,33 @@ const baseUrl =
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
+  let accessToken = accessTokenProvider ? await accessTokenProvider() : null;
 
   try {
     response = await fetch(`${baseUrl}${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         ...(init?.headers ?? {})
       },
       cache: "no-store"
     });
+
+    if (response.status === 401 && accessTokenProvider && accessToken) {
+      accessToken = await accessTokenProvider(true);
+      if (accessToken) {
+        response = await fetch(`${baseUrl}${path}`, {
+          ...init,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+            ...(init?.headers ?? {})
+          },
+          cache: "no-store"
+        });
+      }
+    }
   } catch (error) {
     if (error instanceof TypeError) {
       throw new Error(`Cannot reach the backend at ${baseUrl}. Start the FastAPI server and try again.`);
@@ -40,6 +69,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T;
+}
+
+export type MeResponse = {
+  entra_object_id: string;
+  tenant_id: string;
+  email: string | null;
+  display_name: string | null;
+  scopes: string[];
+};
+
+export async function getMe(): Promise<MeResponse> {
+  if (!meRequest) {
+    meRequest = request<MeResponse>("/me").finally(() => {
+      meRequest = null;
+    });
+  }
+  return meRequest;
 }
 
 export async function listConversations(): Promise<ConversationListItem[]> {

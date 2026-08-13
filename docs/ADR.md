@@ -131,3 +131,21 @@ AgentContext
 IT Agent
 ```
 
+To achieve the final authentication workflow above, here is Phase I:
+```
+Microsoft Login
+      ↓
+Microsoft Entra ID
+      ↓
+Access Token
+      ↓
+Next.js sends Bearer token
+      ↓
+FastAPI
+      ↓
+JWT Validation
+      ↓
+CurrentUser
+      ↓
+GET /api/v1/me
+```

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import "./globals.css";
+import { EntraAuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
   title: "Enterprise IT Support Agent",
@@ -14,8 +15,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <EntraAuthProvider>{children}</EntraAuthProvider>
+      </body>
     </html>
   );
 }
-
