@@ -131,21 +131,49 @@ AgentContext
 IT Agent
 ```
 
-To achieve the final authentication workflow above, here is Phase I:
+# ADR-005: Audit Logging
+Who did what, when, to what resource, and what happened?
+
 ```
-Microsoft Login
-      ↓
-Microsoft Entra ID
-      ↓
-Access Token
-      ↓
-Next.js sends Bearer token
-      ↓
-FastAPI
-      ↓
-JWT Validation
-      ↓
-CurrentUser
-      ↓
-GET /api/v1/me
+                    ┌─────────────┐
+                    │   Employee  │
+                    └──────┬──────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │   FastAPI   │
+                    └──────┬──────┘
+                           │
+                       Request ID
+                           │
+                           ▼
+                  ┌──────────────────┐
+                  │ Authentication   │
+                  │   CurrentUser    │
+                  └────────┬─────────┘
+                           │
+                           ▼
+                  ┌──────────────────┐
+                  │     Agent        │
+                  │                  │
+                  │ Intent Detection │
+                  │ Planner          │
+                  │ Workflow Engine  │
+                  └───────┬──────────┘
+                          │
+             ┌────────────┼────────────┐
+             ▼            ▼            ▼
+        Knowledge       Tools        Tickets
+             │            │            │
+             └────────────┼────────────┘
+                          │
+                          ▼
+                  ┌────────────────┐
+                  │  AuditLogger   │
+                  └───────┬────────┘
+                          │
+                          ▼
+                  ┌────────────────┐
+                  │  audit_events  │
+                  └────────────────┘
 ```

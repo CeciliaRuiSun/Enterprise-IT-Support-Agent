@@ -14,10 +14,15 @@ An enterprise-oriented IT support agent with:
 ```bash
 docker compose up -d db
 cd backend
-pip install -r requirements.txt
-alembic upgrade head
-python -m uvicorn app.main:app --reload
+python -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt
+./.venv/bin/python -m alembic upgrade head
+./.venv/bin/python -m uvicorn app.main:app --reload
 ```
+
+Use `./.venv/bin/python -m ...` or activate the backend environment first with
+`source .venv/bin/activate`. This prevents the system Python from launching
+Uvicorn without backend dependencies such as `PyJWT`.
 
 The database container exposes Postgres on `localhost:5432` with the default credentials from `backend/.env`. After migrations run, the backend automatically indexes supported files from the repository's `Knowledge Base/` folder.
 

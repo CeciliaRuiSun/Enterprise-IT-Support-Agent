@@ -2,17 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+from time import perf_counter
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.intent import classify_intent
-from app.models.common import Conversation, MessageRole, WorkflowRun, WorkflowStatus
+from app.models.common import Conversation, User, WorkflowRun, WorkflowStatus
 from app.schemas.agent import AgentTurnResult
 from app.schemas.ticket import TicketCreateRequest
 from app.services.knowledge_service import KnowledgeService
 from app.services.llm import LLMService
 from app.services.ticket_service import TicketService
+from app.services.audit_logger import AuditLogger
 from app.workflows.ticket.engine import TicketWorkflowEngine
 from app.workflows.ticket.state import TicketWorkflowState
 
@@ -25,11 +27,39 @@ class WorkflowResponse:
 
 
 class WorkflowService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, actor: User | None = None) -> None:
         self.db = db
+        self.actor = actor
+        self.audit_logger = AuditLogger(db)
         self.engine = TicketWorkflowEngine()
         self.ticket_service = TicketService(db)
         self.knowledge_service = KnowledgeService(db)
+
+    async def _run_tool(self, tool_name: str, conversation_id, operation):
+        started = perf_counter()
+        try:
+            result = await operation()
+        except Exception as exc:
+            self.audit_logger.log_tool_call(
+                tool_name=tool_name,
+                status="failure",
+                latency_ms=round((perf_counter() - started) * 1000),
+                conversation_id=conversation_id,
+                error_type=type(exc).__name__,
+                actor=self.actor,
+            )
+            raise
+        self.audit_logger.log_tool_call(
+            tool_name=tool_name,
+            status="success",
+            latency_ms=round((perf_counter() - started) * 1000),
+            conversation_id=conversation_id,
+            resource_id=getattr(result, "ticket_number", None),
+            actor=self.actor,
+            result_count=len(result.chunks) if hasattr(result, "chunks") else None,
+            found=(result is not None) if tool_name == "get_ticket_status" else None,
+        )
+        return result
 
     async def get_active_workflow(self, conversation_id) -> WorkflowRun | None:
         stmt = (
@@ -128,7 +158,10 @@ class WorkflowService:
                     description=state.collected_fields.get("issue_summary") or state.summary,
                     priority=state.collected_fields.get("urgency", "medium"),
                 )
-                ticket = await self.ticket_service.create_ticket(payload, submitted_by=None)
+                ticket = await self._run_tool(
+                    "create_ticket", conversation.id,
+                    lambda: self.ticket_service.create_ticket(payload, submitted_by=None),
+                )
                 workflow.status = WorkflowStatus.completed
                 conversation.active_workflow_type = None
                 conversation.active_workflow_status = None
@@ -187,7 +220,20 @@ class WorkflowService:
         if intent.intent == "ticket_status":
             ticket_id = intent.ticket_id or intent.extracted_fields.get("ticket_id")
             try:
-                ticket = await self.ticket_service.get_ticket(ticket_id) if ticket_id else None
+                if ticket_id:
+                    ticket = await self._run_tool(
+                        "get_ticket_status", conversation.id,
+                        lambda: self.ticket_service.get_ticket(ticket_id),
+                    )
+                else:
+                    self.audit_logger.log_tool_call(
+                        tool_name="get_ticket_status",
+                        status="success",
+                        conversation_id=conversation.id,
+                        actor=self.actor,
+                        found=False,
+                    )
+                    ticket = None
             except (TypeError, ValueError):
                 ticket = None
 
@@ -241,7 +287,10 @@ class WorkflowService:
             )
 
         if intent.intent == "search_knowledge":
-            knowledge_result = await self.knowledge_service.search(intent.extracted_fields.get("query", user_message))
+            knowledge_result = await self._run_tool(
+                "search_knowledge", conversation.id,
+                lambda: self.knowledge_service.search(intent.extracted_fields.get("query", user_message)),
+            )
             if not knowledge_result.chunks:
                 return AgentTurnResult(
                     content="I couldn't find a matching document yet. Try rephrasing the issue or ask for a ticket.",

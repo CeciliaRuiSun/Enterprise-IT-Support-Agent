@@ -1,10 +1,7 @@
 import { ChatPanel } from "@/components/chat-panel";
 import { AuthControls } from "@/components/auth-controls";
-import { listConversations } from "@/lib/api";
 
 export default async function Page() {
-  const conversations = await listConversations().catch(() => []);
-
   return (
     <main className="mx-auto flex h-dvh w-full max-w-7xl flex-col overflow-hidden px-4 py-4 lg:px-6">
       <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -18,7 +15,7 @@ export default async function Page() {
           </div>
           <AuthControls />
         </div>
-        <ChatPanel initialConversations={conversations} />
+        <ChatPanel initialConversations={[]} />
       </div>
     </main>
   );

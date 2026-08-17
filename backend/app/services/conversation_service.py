@@ -16,13 +16,28 @@ from app.schemas.conversation import (
     SendMessageResponse,
 )
 from app.services.workflow_service import WorkflowService
+from app.services.audit_logger import AuditLogger
 
 
 class ConversationService:
     def __init__(self, db: AsyncSession, user: User) -> None:
         self.db = db
         self.user = user
-        self.workflow_service = WorkflowService(db)
+        self.workflow_service = WorkflowService(db, user)
+        self.audit_logger = AuditLogger(db)
+
+    def _log_declared_tool_calls(self, conversation_id: UUID, tool_calls: list[dict]) -> None:
+        executed = {"search_knowledge", "get_ticket_status", "create_ticket"}
+        for call in tool_calls:
+            tool_name = call.get("tool")
+            if not tool_name or tool_name in executed:
+                continue
+            self.audit_logger.log_tool_call(
+                tool_name=tool_name,
+                status="success",
+                conversation_id=conversation_id,
+                actor=self.user,
+            )
 
     async def list_conversations(self, limit: int = 20, offset: int = 0) -> ConversationListResponse:
         stmt = (
@@ -131,6 +146,7 @@ class ConversationService:
             conversation.title = message_content[:80]
 
         agent_result = await self.workflow_service.respond(conversation, message_content)
+        self._log_declared_tool_calls(conversation.id, agent_result.tool_calls)
         assistant_message = Message(
             conversation_id=conversation.id,
             role=MessageRole.assistant,
@@ -174,6 +190,7 @@ class ConversationService:
         await self.db.flush()
 
         agent_result = await self.workflow_service.respond(conversation, message_content)
+        self._log_declared_tool_calls(conversation.id, agent_result.tool_calls)
 
         assistant_message = Message(
             conversation_id=conversation.id,

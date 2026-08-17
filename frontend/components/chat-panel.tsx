@@ -12,6 +12,7 @@ import {
   sendMessage,
   unpinConversation
 } from "@/lib/api";
+import { useAuth } from "@/components/auth-provider";
 import type { ConversationHistory, ConversationListItem, MessageItem } from "@/types";
 
 type Props = {
@@ -173,7 +174,34 @@ function MessageBubble({
   );
 }
 
-export function ChatPanel({ initialConversations }: Props) {
+export function ChatPanel(props: Props) {
+  const { isAuthenticated, login } = useAuth();
+
+  if (!isAuthenticated) {
+    return (
+      <section className="flex min-h-0 flex-1 items-center justify-center rounded-[2rem] border border-white/10 bg-ink-900/70 p-6 shadow-glow">
+        <div className="w-full max-w-xl rounded-3xl border border-teal-400/20 bg-teal-400/[0.06] p-8 text-center">
+          <div className="text-xs uppercase tracking-[0.3em] text-teal-300">Sign-in required</div>
+          <h1 className="mt-3 text-2xl font-semibold text-white">Sign in to use the support agent</h1>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-300">
+            Your conversations and messages are available after you authenticate with your Microsoft account.
+          </p>
+          <button
+            type="button"
+            onClick={() => void login()}
+            className="mt-6 rounded-xl bg-teal-400 px-5 py-3 text-sm font-semibold text-ink-950 transition hover:bg-teal-300"
+          >
+            Sign in with Microsoft
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return <AuthenticatedChatPanel {...props} />;
+}
+
+function AuthenticatedChatPanel({ initialConversations }: Props) {
   const [conversationList, setConversationList] = useState<ConversationListItem[]>(initialConversations);
   const [conversationId, setConversationId] = useState<string | null>(
     getLatestConversation(initialConversations)?.conversation_id ?? null
@@ -191,6 +219,24 @@ export function ChatPanel({ initialConversations }: Props) {
     setConversationList(initialConversations);
     setConversationId(getLatestConversation(initialConversations)?.conversation_id ?? null);
   }, [initialConversations]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    listConversations()
+      .then((conversations) => {
+        if (ignore) return;
+        setConversationList(conversations);
+        setConversationId(getLatestConversation(conversations)?.conversation_id ?? null);
+      })
+      .catch(() => {
+        if (!ignore) setStatus("Unable to load conversations");
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!conversationId) {
