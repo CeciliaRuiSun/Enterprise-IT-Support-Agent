@@ -177,3 +177,36 @@ Who did what, when, to what resource, and what happened?
                   │  audit_events  │
                   └────────────────┘
 ```
+
+
+
+# ADR-006: Evaluation & Observability
+
+```
+User Request
+    ↓
+FastAPI Middleware
+    ├── request_id
+    └── trace_id
+          ↓
+      Agent Run
+          ↓
+ ┌─────────────────────────────┐
+ │ Intent Detection            │
+ │ Knowledge Retrieval         │
+ │ LLM Generation              │
+ │ Tool Selection              │
+ │ Tool Execution              │
+ │ Workflow                    │
+ │ Response Generation         │
+ └─────────────────────────────┘
+          ↓
+     Observability
+      /          \
+ Traces/Metrics   Logs
+          ↓
+       Evaluation
+          ↓
+   Eval Score / Regression
+
+```
